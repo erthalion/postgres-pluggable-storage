@@ -33,5 +33,8 @@
 { oid => '4001', oid_symbol => 'HEAP_TABLE_AM_OID',
   descr => 'heap table access method',
   amname => 'heap', amhandler => 'heap_tableam_handler', amtype => 't' },
+{ oid => '4003', oid_symbol => 'HEAP_TABLE_AM_OID_TEST',
+  descr => 'heap table access method_test',
+  amname => 'heap_test', amhandler => 'heap_tableam_handler_test', amtype => 't' },
 
 ]

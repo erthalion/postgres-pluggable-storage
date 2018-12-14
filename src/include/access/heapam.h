@@ -143,6 +143,8 @@ extern void heap_endscan(TableScanDesc scan);
 extern HeapTuple heap_getnext(TableScanDesc scan, ScanDirection direction);
 extern struct TupleTableSlot *heap_getnextslot(TableScanDesc sscan, ScanDirection direction,
 				 struct TupleTableSlot *slot);
+extern struct TupleTableSlot *heap_getnextslot_test(TableScanDesc sscan, ScanDirection direction,
+				 struct TupleTableSlot *slot);
 extern HeapTuple heap_scan_getnext(TableScanDesc sscan, ScanDirection direction);
 
 extern bool heap_fetch(Relation relation, ItemPointer tid, Snapshot snapshot,

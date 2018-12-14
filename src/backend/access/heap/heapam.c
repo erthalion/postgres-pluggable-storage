@@ -1661,6 +1661,40 @@ heap_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot *s
 									scan->rs_cbuf);
 }
 
+TupleTableSlot *
+heap_getnextslot_test(TableScanDesc sscan, ScanDirection direction, TupleTableSlot *slot)
+{
+	HeapScanDesc scan = (HeapScanDesc) sscan;
+
+	/* Note: no locking manipulations needed */
+
+	HEAPAMSLOTDEBUG_1;			/* heap_getnext( info ) */
+
+	if (scan->rs_scan.rs_pageatatime)
+		heapgettup_pagemode(scan, direction,
+							scan->rs_scan.rs_nkeys, scan->rs_scan.rs_key);
+	else
+		heapgettup(scan, direction, scan->rs_scan.rs_nkeys, scan->rs_scan.rs_key);
+
+	if (scan->rs_ctup.t_data == NULL)
+	{
+		HEAPAMSLOTDEBUG_2;		/* heap_getnext returning EOS */
+		ExecClearTuple(slot);
+		return NULL;
+	}
+
+	/*
+	 * if we get here it means we have a new current scan tuple, so point to
+	 * the proper return buffer and return the tuple.
+	 */
+	HEAPAMSLOTDEBUG_3;			/* heap_getnext returning tuple */
+
+	pgstat_count_heap_getnext(scan->rs_scan.rs_rd);
+
+	return ExecStoreBufferHeapTupleTest(&scan->rs_ctup, slot,
+									scan->rs_cbuf);
+}
+
 /*
  *	heap_fetch		- retrieve tuple with given tid
  *

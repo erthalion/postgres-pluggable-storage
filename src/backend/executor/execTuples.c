@@ -74,6 +74,9 @@ static TupleDesc ExecTypeFromTLInternal(List *targetList,
 static pg_attribute_always_inline void
 slot_deform_heap_tuple(TupleTableSlot *slot, HeapTuple tuple, uint32 *offp,
 					   int natts);
+static pg_attribute_always_inline void
+slot_deform_heap_tuple_test(TupleTableSlot *slot, HeapTuple tuple, uint32 *offp,
+					   int natts);
 static void tts_buffer_heap_store_tuple(TupleTableSlot *slot, HeapTuple tuple, Buffer buffer);
 
 
@@ -81,6 +84,7 @@ const TupleTableSlotOps TTSOpsVirtual;
 const TupleTableSlotOps TTSOpsHeapTuple;
 const TupleTableSlotOps TTSOpsMinimalTuple;
 const TupleTableSlotOps TTSOpsBufferHeapTuple;
+const TupleTableSlotOps TTSOpsBufferHeapTupleTest;
 
 
 /*
@@ -690,6 +694,16 @@ tts_buffer_heap_getsomeattrs(TupleTableSlot *slot, int natts)
 	slot_deform_heap_tuple(slot, bslot->base.tuple, &bslot->base.off, natts);
 }
 
+static void
+tts_buffer_heap_getsomeattrs_test(TupleTableSlot *slot, int natts)
+{
+	BufferHeapTupleTableSlot *bslot = (BufferHeapTupleTableSlot *) slot;
+
+	Assert(!TTS_EMPTY(slot));
+
+	slot_deform_heap_tuple_test(slot, bslot->base.tuple, &bslot->base.off, natts);
+}
+
 static Datum
 tts_buffer_heap_getsysattr(TupleTableSlot *slot, int attnum, bool *isnull)
 {
@@ -1010,6 +1024,105 @@ slot_deform_heap_tuple(TupleTableSlot *slot, HeapTuple tuple, uint32 *offp,
 		slot->tts_flags &= ~TTS_FLAG_SLOW;
 }
 
+static pg_attribute_always_inline void
+slot_deform_heap_tuple_test(TupleTableSlot *slot, HeapTuple tuple, uint32 *offp,
+					   int natts)
+{
+	TupleDesc	tupleDesc = slot->tts_tupleDescriptor;
+	Datum	   *values = slot->tts_values;
+	bool	   *isnull = slot->tts_isnull;
+	HeapTupleHeader tup = tuple->t_data;
+	bool		hasnulls = HeapTupleHasNulls(tuple);
+	int			attnum;
+	char	   *tp;				/* ptr to tuple data */
+	uint32		off;			/* offset in tuple data */
+	bits8	   *bp = tup->t_bits;	/* ptr to null bitmap in tuple */
+	bool		slow;			/* can we use/set attcacheoff? */
+
+	/* We can only fetch as many attributes as the tuple has. */
+	natts = Min(HeapTupleHeaderGetNatts(tuple->t_data), natts);
+
+	/*
+	 * Check whether the first call for this tuple, and initialize or restore
+	 * loop state.
+	 */
+	attnum = slot->tts_nvalid;
+	if (attnum == 0)
+	{
+		/* Start from the first attribute */
+		off = 0;
+		slow = false;
+	}
+	else
+	{
+		/* Restore state from previous execution */
+		off = *offp;
+		slow = TTS_SLOW(slot);
+	}
+
+	tp = (char *) tup + tup->t_hoff;
+
+	for (; attnum < natts; attnum++)
+	{
+		Form_pg_attribute thisatt = TupleDescAttr(tupleDesc, attnum);
+
+		if (hasnulls && att_isnull(attnum, bp))
+		{
+			values[attnum] = (Datum) 0;
+			isnull[attnum] = true;
+			slow = true;		/* can't use attcacheoff anymore */
+			continue;
+		}
+
+		isnull[attnum] = false;
+
+		if (!slow && thisatt->attcacheoff >= 0)
+			off = thisatt->attcacheoff;
+		else if (thisatt->attlen == -1)
+		{
+			/*
+			 * We can only cache the offset for a varlena attribute if the
+			 * offset is already suitably aligned, so that there would be no
+			 * pad bytes in any case: then the offset will be valid for either
+			 * an aligned or unaligned value.
+			 */
+			if (!slow &&
+				off == att_align_nominal(off, thisatt->attalign))
+				thisatt->attcacheoff = off;
+			else
+			{
+				off = att_align_pointer(off, thisatt->attalign, -1,
+										tp + off);
+				slow = true;
+			}
+		}
+		else
+		{
+			/* not varlena, so safe to use att_align_nominal */
+			off = att_align_nominal(off, thisatt->attalign);
+
+			if (!slow)
+				thisatt->attcacheoff = off;
+		}
+
+		values[attnum] = fetchatt(thisatt, tp + off) + 1;
+
+		off = att_addlength_pointer(off, thisatt->attlen, tp + off);
+
+		if (thisatt->attlen <= 0)
+			slow = true;		/* can't use attcacheoff anymore */
+	}
+
+	/*
+	 * Save state for next execution
+	 */
+	slot->tts_nvalid = attnum;
+	*offp = off;
+	if (slow)
+		slot->tts_flags |= TTS_FLAG_SLOW;
+	else
+		slot->tts_flags &= ~TTS_FLAG_SLOW;
+}
 
 const TupleTableSlotOps TTSOpsVirtual = {
 	.base_slot_size = sizeof(VirtualTupleTableSlot),
@@ -1082,6 +1195,22 @@ const TupleTableSlotOps TTSOpsBufferHeapTuple = {
 	.copy_minimal_tuple = tts_buffer_heap_copy_minimal_tuple
 };
 
+const TupleTableSlotOps TTSOpsBufferHeapTupleTest = {
+	.base_slot_size = sizeof(BufferHeapTupleTableSlot),
+	.init = tts_buffer_heap_init,
+	.release = tts_buffer_heap_release,
+	.clear = tts_buffer_heap_clear,
+	.getsomeattrs = tts_buffer_heap_getsomeattrs_test,
+	.getsysattr = tts_buffer_heap_getsysattr,
+	.materialize = tts_buffer_heap_materialize,
+	.copyslot = tts_buffer_heap_copyslot,
+	.get_heap_tuple = tts_buffer_heap_get_heap_tuple,
+
+	/* A buffer heap tuple table slot can not "own" a minimal tuple. */
+	.get_minimal_tuple = NULL,
+	.copy_heap_tuple = tts_buffer_heap_copy_heap_tuple,
+	.copy_minimal_tuple = tts_buffer_heap_copy_minimal_tuple
+};
 
 /* ----------------------------------------------------------------
  *				  tuple table create/delete functions
@@ -1443,6 +1572,28 @@ ExecStoreBufferHeapTuple(HeapTuple tuple,
 	Assert(BufferIsValid(buffer));
 
 	if (unlikely(!TTS_IS_BUFFERTUPLE(slot)))
+		elog(ERROR, "trying to store an on-disk heap tuple into wrong type of slot");
+	tts_buffer_heap_store_tuple(slot, tuple, buffer);
+
+	slot->tts_tableOid = tuple->t_tableOid;
+
+	return slot;
+}
+
+TupleTableSlot *
+ExecStoreBufferHeapTupleTest(HeapTuple tuple,
+						 TupleTableSlot *slot,
+						 Buffer buffer)
+{
+	/*
+	 * sanity checks
+	 */
+	Assert(tuple != NULL);
+	Assert(slot != NULL);
+	Assert(slot->tts_tupleDescriptor != NULL);
+	Assert(BufferIsValid(buffer));
+
+	if (unlikely(!TTS_IS_BUFFERTUPLE_TEST(slot)))
 		elog(ERROR, "trying to store an on-disk heap tuple into wrong type of slot");
 	tts_buffer_heap_store_tuple(slot, tuple, buffer);
 

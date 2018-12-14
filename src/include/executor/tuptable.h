@@ -225,11 +225,13 @@ extern PGDLLIMPORT const TupleTableSlotOps TTSOpsVirtual;
 extern PGDLLIMPORT const TupleTableSlotOps TTSOpsHeapTuple;
 extern PGDLLIMPORT const TupleTableSlotOps TTSOpsMinimalTuple;
 extern PGDLLIMPORT const TupleTableSlotOps TTSOpsBufferHeapTuple;
+extern PGDLLIMPORT const TupleTableSlotOps TTSOpsBufferHeapTupleTest;
 
 #define TTS_IS_VIRTUAL(slot) ((slot)->tts_ops == &TTSOpsVirtual)
 #define TTS_IS_HEAPTUPLE(slot) ((slot)->tts_ops == &TTSOpsHeapTuple)
 #define TTS_IS_MINIMALTUPLE(slot) ((slot)->tts_ops == &TTSOpsMinimalTuple)
 #define TTS_IS_BUFFERTUPLE(slot) ((slot)->tts_ops == &TTSOpsBufferHeapTuple)
+#define TTS_IS_BUFFERTUPLE_TEST(slot) ((slot)->tts_ops == &TTSOpsBufferHeapTupleTest)
 
 
 /*
@@ -312,6 +314,9 @@ extern void ExecForceStoreHeapTuple(HeapTuple tuple, TupleTableSlot *slot);
 /* FIXME: Remove */
 extern void ExecForceStoreHeapTupleDatum(Datum data, TupleTableSlot *slot);
 extern TupleTableSlot *ExecStoreBufferHeapTuple(HeapTuple tuple,
+						 TupleTableSlot *slot,
+						 Buffer buffer);
+extern TupleTableSlot *ExecStoreBufferHeapTupleTest(HeapTuple tuple,
 						 TupleTableSlot *slot,
 						 Buffer buffer);
 extern TupleTableSlot *ExecStoreMinimalTuple(MinimalTuple mtup,

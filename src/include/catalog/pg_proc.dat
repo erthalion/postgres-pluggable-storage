@@ -821,6 +821,10 @@
   descr => 'row-oriented heap table access method handler',
   proname => 'heap_tableam_handler', provolatile => 'v', prorettype => 'table_am_handler',
   proargtypes => 'internal', prosrc => 'heap_tableam_handler' },
+{ oid => '4004', oid_symbol => 'HEAP_TABLE_AM_HANDLER_OID_TEST',
+  descr => 'row-oriented heap table access method handler',
+  proname => 'heap_tableam_handler_test', provolatile => 'v', prorettype => 'table_am_handler',
+  proargtypes => 'internal', prosrc => 'heap_tableam_handler_test' },
 
 # Index access method handlers
 { oid => '330', descr => 'btree index access method handler',
