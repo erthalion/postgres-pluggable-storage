@@ -316,6 +316,9 @@ extern void ExecForceStoreHeapTupleDatum(Datum data, TupleTableSlot *slot);
 extern TupleTableSlot *ExecStoreBufferHeapTuple(HeapTuple tuple,
 						 TupleTableSlot *slot,
 						 Buffer buffer);
+extern TupleTableSlot *ExecStoreBufferHeapTestTuple(HeapTuple tuple,
+						 TupleTableSlot *slot,
+						 Buffer buffer);
 extern TupleTableSlot *ExecStoreBufferHeapTupleTest(HeapTuple tuple,
 						 TupleTableSlot *slot,
 						 Buffer buffer);

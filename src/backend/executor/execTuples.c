@@ -1105,7 +1105,8 @@ slot_deform_heap_tuple_test(TupleTableSlot *slot, HeapTuple tuple, uint32 *offp,
 				thisatt->attcacheoff = off;
 		}
 
-		values[attnum] = fetchatt(thisatt, tp + off) + 1;
+		/*values[attnum] = fetchatt(thisatt, tp + off) + 1;*/
+		values[attnum] = fetchatt(thisatt, tp + off);
 
 		off = att_addlength_pointer(off, thisatt->attlen, tp + off);
 
@@ -1581,6 +1582,28 @@ ExecStoreBufferHeapTuple(HeapTuple tuple,
 }
 
 TupleTableSlot *
+ExecStoreBufferHeapTestTuple(HeapTuple tuple,
+						 TupleTableSlot *slot,
+						 Buffer buffer)
+{
+	/*
+	 * sanity checks
+	 */
+	Assert(tuple != NULL);
+	Assert(slot != NULL);
+	Assert(slot->tts_tupleDescriptor != NULL);
+	Assert(BufferIsValid(buffer));
+
+	if (unlikely(!TTS_IS_BUFFERTUPLE_TEST(slot)))
+		elog(ERROR, "trying to store an on-disk heap test tuple into wrong type of slot");
+	tts_buffer_heap_store_tuple(slot, tuple, buffer);
+
+	slot->tts_tableOid = tuple->t_tableOid;
+
+	return slot;
+}
+
+TupleTableSlot *
 ExecStoreBufferHeapTupleTest(HeapTuple tuple,
 						 TupleTableSlot *slot,
 						 Buffer buffer)
@@ -1594,7 +1617,7 @@ ExecStoreBufferHeapTupleTest(HeapTuple tuple,
 	Assert(BufferIsValid(buffer));
 
 	if (unlikely(!TTS_IS_BUFFERTUPLE_TEST(slot)))
-		elog(ERROR, "trying to store an on-disk heap tuple into wrong type of slot");
+		elog(ERROR, "trying to store an on-disk heap test tuple into wrong type of slot");
 	tts_buffer_heap_store_tuple(slot, tuple, buffer);
 
 	slot->tts_tableOid = tuple->t_tableOid;
