@@ -347,6 +347,7 @@ struct _archiveHandle
 	char	   *currUser;		/* current username, or NULL if unknown */
 	char	   *currSchema;		/* current schema, or NULL */
 	char	   *currTablespace; /* current tablespace, or NULL */
+	char	   *currTableAm; 	/* current table access method, or NULL */
 
 	void	   *lo_buf;
 	size_t		lo_buf_used;
@@ -373,6 +374,8 @@ struct _tocEntry
 	char	   *namespace;		/* null or empty string if not in a schema */
 	char	   *tablespace;		/* null if not in a tablespace; empty string
 								 * means use database default */
+	char	   *tableam;			/* table access method, onlyt for TABLE tags */
+
 	char	   *owner;
 	char	   *desc;
 	char	   *defn;
@@ -410,7 +413,7 @@ extern TocEntry *ArchiveEntry(Archive *AHX,
 			 CatalogId catalogId, DumpId dumpId,
 			 const char *tag,
 			 const char *namespace, const char *tablespace,
-			 const char *owner,
+			 const char *owner, const char *amname,
 			 const char *desc, teSection section,
 			 const char *defn,
 			 const char *dropStmt, const char *copyStmt,
